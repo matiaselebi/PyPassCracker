@@ -4,6 +4,7 @@ import itertools
 import string
 import multiprocessing
 import time
+import os
 
 def mostrar_banner():
     print("======================================")
@@ -27,6 +28,7 @@ def cifrar(texto, algoritmo):
     elif algoritmo == "sha256": return hashlib.sha256(texto.encode()).hexdigest()
     elif algoritmo == "sha384": return hashlib.sha384(texto.encode()).hexdigest()
     elif algoritmo == "sha512": return hashlib.sha512(texto.encode()).hexdigest()
+    return None
 
 def ataque_diccionario(hash_objetivo, ruta_diccionario, algoritmo):
     inicio = time.time()
@@ -41,10 +43,10 @@ def ataque_diccionario(hash_objetivo, ruta_diccionario, algoritmo):
                     print(f"\nExito: La contraseña es {palabra}")
                     print(f"Intentos: {intentos} | Tiempo: {fin - inicio:.2f} segundos")
                     return True
-        print("\nFallo: No se encontro la contraseña.")
+        print("Fallo: No se encontro la contraseña.")
         return False
     except FileNotFoundError:
-        print("\nError: No se encontro el archivo.")
+        print("Error: No se encontro el archivo.")
         return False
 
 def worker_fuerza_bruta(hash_objetivo, longitud, caracteres, subconjunto, resultado_encontrado, contador_intentos, algoritmo):
@@ -61,7 +63,7 @@ def worker_fuerza_bruta(hash_objetivo, longitud, caracteres, subconjunto, result
                 return
 
 def ataque_fuerza_bruta_paralelo(hash_objetivo, longitud_maxima, num_procesos, algoritmo):
-    caracteres = string.ascii_letters + string.digits
+    caracteres = string.ascii_letters + string.digits + string.punctuation
     resultado_encontrado = multiprocessing.Event()
     contador_intentos = multiprocessing.Value('q', 0)
     inicio = time.time()
@@ -86,7 +88,23 @@ def ataque_fuerza_bruta_paralelo(hash_objetivo, longitud_maxima, num_procesos, a
         fin = time.time()
         print(f"Intentos totales: {contador_intentos.value} | Tiempo total: {fin - inicio:.2f} segundos")
     else:
-        print("\nFallo: No se encontro la contraseña.")
+        print("Fallo: No se encontro la contraseña.")
+
+def procesar_hash(hash_objetivo, mode, wordlist, length, cores):
+    print(f"\nAnalizando objetivo: {hash_objetivo}")
+    algoritmo = detectar_algoritmo(hash_objetivo)
+    
+    if not algoritmo:
+        print("Error: El hash no parece ser un formato soportado.")
+        return
+
+    print(f"Algoritmo detectado: {algoritmo.upper()}")
+
+    if mode == "diccionario":
+        ataque_diccionario(hash_objetivo, wordlist, algoritmo)
+    else:
+        print(f"Modo: Fuerza Bruta | Nucleos: {cores} | Longitud Max: {length}")
+        ataque_fuerza_bruta_paralelo(hash_objetivo, length, cores, algoritmo)
 
 def main():
     mostrar_banner()
@@ -98,19 +116,18 @@ def main():
     parser.add_argument("-c", "--cores", type=int, default=1)
     
     args = parser.parse_args()
-    
-    algoritmo = detectar_algoritmo(args.target)
-    if not algoritmo:
-        print("Error: El hash no parece ser MD5 ni SHA256.")
-        return
 
-    print(f"Algoritmo detectado: {algoritmo.upper()}")
-
-    if args.mode == "diccionario":
-        ataque_diccionario(args.target, args.wordlist, algoritmo)
+    if os.path.isfile(args.target):
+        try:
+            with open(args.target, "r") as f:
+                hashes = [linea.strip() for linea in f if linea.strip()]
+            print(f"Cargados {len(hashes)} hashes desde el archivo.")
+            for h in hashes:
+                procesar_hash(h, args.mode, args.wordlist, args.length, args.cores)
+        except Exception as e:
+            print(f"Error al leer el archivo: {e}")
     else:
-        print(f"Modo: Fuerza Bruta | Nucleos: {args.cores} | Longitud Max: {args.length}")
-        ataque_fuerza_bruta_paralelo(args.target, args.length, args.cores, algoritmo)
+        procesar_hash(args.target, args.mode, args.wordlist, args.length, args.cores)
 
 if __name__ == "__main__":
     main()
