@@ -8,10 +8,22 @@ import time
 def mostrar_banner():
     print("======================================")
     print("           PyPassCracker              ")
-    print("      Parallel Edition (R7)           ")
     print("======================================")
 
-def ataque_diccionario(hash_objetivo, ruta_diccionario):
+def detectar_algoritmo(hash_objetivo):
+    if len(hash_objetivo) == 32:
+        return "md5"
+    elif len(hash_objetivo) == 64:
+        return "sha256"
+    else:
+        return None
+
+def cifrar(texto, algoritmo):
+    if algoritmo == "md5":
+        return hashlib.md5(texto.encode()).hexdigest()
+    return hashlib.sha256(texto.encode()).hexdigest()
+
+def ataque_diccionario(hash_objetivo, ruta_diccionario, algoritmo):
     inicio = time.time()
     intentos = 0
     try:
@@ -19,37 +31,34 @@ def ataque_diccionario(hash_objetivo, ruta_diccionario):
             for linea in archivo:
                 intentos += 1
                 palabra = linea.strip()
-                if hashlib.md5(palabra.encode()).hexdigest() == hash_objetivo:
+                if cifrar(palabra, algoritmo) == hash_objetivo:
                     fin = time.time()
-                    print(f"\nExito: La contrasena es {palabra}")
+                    print(f"\nExito: La contraseña es {palabra}")
                     print(f"Intentos: {intentos} | Tiempo: {fin - inicio:.2f} segundos")
                     return True
-        print("\nFallo: No se encontro la contrasena.")
+        print("\nFallo: No se encontro la contraseña.")
         return False
     except FileNotFoundError:
         print("\nError: No se encontro el archivo.")
         return False
 
-def worker_fuerza_bruta(hash_objetivo, longitud, caracteres, subconjunto, resultado_encontrado, contador_intentos):
+def worker_fuerza_bruta(hash_objetivo, longitud, caracteres, subconjunto, resultado_encontrado, contador_intentos, algoritmo):
     for prefijo in subconjunto:
         if resultado_encontrado.is_set(): return
         for resto in itertools.product(caracteres, repeat=longitud - 1):
             if resultado_encontrado.is_set(): return
             palabra = prefijo + ''.join(resto)
-            
-            # Incremento seguro del contador
             with contador_intentos.get_lock():
                 contador_intentos.value += 1
-                
-            if hashlib.md5(palabra.encode()).hexdigest() == hash_objetivo:
-                print(f"\nExito: La contrasena es {palabra}")
+            if cifrar(palabra, algoritmo) == hash_objetivo:
+                print(f"\nExito: La contraseña es {palabra}")
                 resultado_encontrado.set()
                 return
 
-def ataque_fuerza_bruta_paralelo(hash_objetivo, longitud_maxima, num_procesos):
+def ataque_fuerza_bruta_paralelo(hash_objetivo, longitud_maxima, num_procesos, algoritmo):
     caracteres = string.ascii_letters + string.digits
     resultado_encontrado = multiprocessing.Event()
-    contador_intentos = multiprocessing.Value('q', 0) # 'q' para soportar números más grandes (long long)
+    contador_intentos = multiprocessing.Value('q', 0)
     inicio = time.time()
     
     for longitud in range(1, longitud_maxima + 1):
@@ -58,13 +67,12 @@ def ataque_fuerza_bruta_paralelo(hash_objetivo, longitud_maxima, num_procesos):
         prefijos = list(caracteres)
         chunk_size = max(1, len(prefijos) // num_procesos)
         procesos = []
-        
         for i in range(num_procesos):
             start = i * chunk_size
             end = len(prefijos) if i == num_procesos - 1 else (i + 1) * chunk_size
             subconjunto = prefijos[start:end]
             p = multiprocessing.Process(target=worker_fuerza_bruta, 
-                                        args=(hash_objetivo, longitud, caracteres, subconjunto, resultado_encontrado, contador_intentos))
+                                        args=(hash_objetivo, longitud, caracteres, subconjunto, resultado_encontrado, contador_intentos, algoritmo))
             procesos.append(p)
             p.start()
         for p in procesos: p.join()
@@ -73,7 +81,7 @@ def ataque_fuerza_bruta_paralelo(hash_objetivo, longitud_maxima, num_procesos):
         fin = time.time()
         print(f"Intentos totales: {contador_intentos.value} | Tiempo total: {fin - inicio:.2f} segundos")
     else:
-        print("\nFallo: No se encontro la contrasena.")
+        print("\nFallo: No se encontro la contraseña.")
 
 def main():
     mostrar_banner()
@@ -86,12 +94,18 @@ def main():
     
     args = parser.parse_args()
     
+    algoritmo = detectar_algoritmo(args.target)
+    if not algoritmo:
+        print("Error: El hash no parece ser MD5 ni SHA256.")
+        return
+
+    print(f"Algoritmo detectado: {algoritmo.upper()}")
+
     if args.mode == "diccionario":
-        print(f"Modo: Diccionario | Archivo: {args.wordlist}")
-        ataque_diccionario(args.target, args.wordlist)
+        ataque_diccionario(args.target, args.wordlist, algoritmo)
     else:
         print(f"Modo: Fuerza Bruta | Nucleos: {args.cores} | Longitud Max: {args.length}")
-        ataque_fuerza_bruta_paralelo(args.target, args.length, args.cores)
+        ataque_fuerza_bruta_paralelo(args.target, args.length, args.cores, algoritmo)
 
 if __name__ == "__main__":
     main()
