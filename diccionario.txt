@@ -1,0 +1,8 @@
+admin
+password
+123456
+qwerty
+1234
+iloveyou
+dragon
+12345678
