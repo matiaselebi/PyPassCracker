@@ -11,17 +11,22 @@ def mostrar_banner():
     print("======================================")
 
 def detectar_algoritmo(hash_objetivo):
-    if len(hash_objetivo) == 32:
-        return "md5"
-    elif len(hash_objetivo) == 64:
-        return "sha256"
-    else:
-        return None
+    longitud = len(hash_objetivo)
+    if longitud == 32: return "md5"
+    elif longitud == 40: return "sha1"
+    elif longitud == 56: return "sha224"
+    elif longitud == 64: return "sha256"
+    elif longitud == 96: return "sha384"
+    elif longitud == 128: return "sha512"
+    return None
 
 def cifrar(texto, algoritmo):
-    if algoritmo == "md5":
-        return hashlib.md5(texto.encode()).hexdigest()
-    return hashlib.sha256(texto.encode()).hexdigest()
+    if algoritmo == "md5": return hashlib.md5(texto.encode()).hexdigest()
+    elif algoritmo == "sha1": return hashlib.sha1(texto.encode()).hexdigest()
+    elif algoritmo == "sha224": return hashlib.sha224(texto.encode()).hexdigest()
+    elif algoritmo == "sha256": return hashlib.sha256(texto.encode()).hexdigest()
+    elif algoritmo == "sha384": return hashlib.sha384(texto.encode()).hexdigest()
+    elif algoritmo == "sha512": return hashlib.sha512(texto.encode()).hexdigest()
 
 def ataque_diccionario(hash_objetivo, ruta_diccionario, algoritmo):
     inicio = time.time()
