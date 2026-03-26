@@ -5,6 +5,21 @@ import string
 import multiprocessing
 import time
 import os
+import sqlite3
+
+def configurar_db():
+    conexion = sqlite3.connect("resultados.db")
+    cursor = conexion.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS descifrados (hash TEXT, contrasena TEXT, algoritmo TEXT)")
+    conexion.commit()
+    conexion.close()
+
+def guardar_db(hash_obj, contrasena, algoritmo):
+    conexion = sqlite3.connect("resultados.db")
+    cursor = conexion.cursor()
+    cursor.execute("INSERT INTO descifrados (hash, contrasena, algoritmo) VALUES (?, ?, ?)", (hash_obj, contrasena, algoritmo))
+    conexion.commit()
+    conexion.close()
 
 def mostrar_banner():
     print("======================================")
@@ -42,6 +57,7 @@ def ataque_diccionario(hash_objetivo, ruta_diccionario, algoritmo):
                     fin = time.time()
                     print(f"\nExito: La contraseña es {palabra}")
                     print(f"Intentos: {intentos} | Tiempo: {fin - inicio:.2f} segundos")
+                    guardar_db(hash_objetivo, palabra, algoritmo)
                     return True
         print("Fallo: No se encontro la contraseña.")
         return False
@@ -59,6 +75,7 @@ def worker_fuerza_bruta(hash_objetivo, longitud, caracteres, subconjunto, result
                 contador_intentos.value += 1
             if cifrar(palabra, algoritmo) == hash_objetivo:
                 print(f"\nExito: La contraseña es {palabra}")
+                guardar_db(hash_objetivo, palabra, algoritmo)
                 resultado_encontrado.set()
                 return
 
@@ -108,6 +125,7 @@ def procesar_hash(hash_objetivo, mode, wordlist, length, cores):
 
 def main():
     mostrar_banner()
+    configurar_db()
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--target", required=True)
     parser.add_argument("-m", "--mode", choices=["diccionario", "bruta"], required=True)
